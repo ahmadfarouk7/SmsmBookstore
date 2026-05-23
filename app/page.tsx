@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -374,6 +375,67 @@ function ScrollReveal({
   );
 }
 
+function SectionTitle({ name, emoji }: { name: string; emoji: string }) {
+  return (
+    <h2 className="section-title">
+      <span className="section-title-name">{name}</span>
+      <span className="section-title-emoji" aria-hidden>
+        {emoji}
+      </span>
+    </h2>
+  );
+}
+
+function OffersMarquee() {
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [duration, setDuration] = useState(18);
+
+  const loopItems = useMemo(
+    () => Array.from({ length: 6 }, () => MARQUEE_ITEMS).flat(),
+    [],
+  );
+
+  useEffect(() => {
+    const sync = () => {
+      const group = groupRef.current;
+      if (!group) return;
+      setDuration(Math.max(12, group.scrollWidth / 45));
+    };
+
+    sync();
+    const observer = new ResizeObserver(sync);
+    if (groupRef.current) observer.observe(groupRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const renderChip = (item: (typeof MARQUEE_ITEMS)[number], key: string) => (
+    <span key={key} className="marquee-chip">
+      <span className="marquee-chip-text">{item.text}</span>
+      <span className="marquee-chip-icon" aria-hidden>
+        {item.icon}
+      </span>
+    </span>
+  );
+
+  return (
+    <div className="marquee-viewport">
+      <span className="marquee-fade marquee-fade--start" aria-hidden />
+      <span className="marquee-fade marquee-fade--end" aria-hidden />
+      <div
+        className="marquee-track"
+        style={{ animationDuration: `${duration}s` }}
+      >
+        <div className="marquee-group" ref={groupRef}>
+          {loopItems.map((item, i) => renderChip(item, `a-${i}`))}
+        </div>
+        <div className="marquee-group" aria-hidden>
+          {loopItems.map((item, i) => renderChip(item, `b-${i}`))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BookCard({
   book,
   index,
@@ -453,7 +515,7 @@ function HorizontalBooks({
 
       children.forEach((child, i) => {
         const rect = child.getBoundingClientRect();
-        const dist = Math.abs(rect.left - containerRect.left);
+        const dist = Math.abs(rect.right - containerRect.right);
         if (dist < minDist) {
           minDist = dist;
           closest = i;
@@ -475,19 +537,19 @@ function HorizontalBooks({
           <>
             <button
               type="button"
-              className="hscroll-arrow hscroll-arrow--prev"
-              onClick={scrollPrev}
-              disabled={activeDot === 0}
-              aria-label="الكتاب السابق"
+              className="hscroll-arrow hscroll-arrow--next"
+              onClick={scrollNext}
+              disabled={activeDot === books.length - 1}
+              aria-label="الكتاب التالي"
             >
               ›
             </button>
             <button
               type="button"
-              className="hscroll-arrow hscroll-arrow--next"
-              onClick={scrollNext}
-              disabled={activeDot === books.length - 1}
-              aria-label="الكتاب التالي"
+              className="hscroll-arrow hscroll-arrow--prev"
+              onClick={scrollPrev}
+              disabled={activeDot === 0}
+              aria-label="الكتاب السابق"
             >
               ‹
             </button>
@@ -526,7 +588,7 @@ export default function HomePage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=El+Messiri:wght@500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700;800&family=El+Messiri:wght@500;600;700&display=swap');
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -576,9 +638,14 @@ export default function HomePage() {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+        @keyframes marqueeScroll {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-50%, 0, 0); }
+        }
+
+        @keyframes marqueeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes shimmer {
@@ -774,12 +841,16 @@ export default function HomePage() {
         }
 
         .header-tagline-text {
-          font-size: 16px;
+          font-family: "Amiri", "Times New Roman", serif;
+          font-size: 26px;
           font-weight: 400;
-          color: #f5e8f0;
-          letter-spacing: 5px;
-          margin: 0;
-          text-shadow: 0 0 14px rgba(147, 159, 255, 0.4);
+          font-style: italic;
+          color: #fff8fc;
+          letter-spacing: 1px;
+          margin: 4px 0 0;
+          text-shadow: 0 2px 12px rgba(45, 36, 56, 0.35);
+          opacity: 0;
+          animation: fadeUp 0.55s ease forwards 0.45s;
         }
 
         .header-hero-main {
@@ -796,6 +867,8 @@ export default function HomePage() {
           width: 100%;
           flex-shrink: 0;
           margin-top: 14px;
+          opacity: 0;
+          animation: marqueeIn 0.45s ease forwards 0.35s;
         }
 
         .search-box {
@@ -949,6 +1022,7 @@ export default function HomePage() {
           overflow: hidden;
           display: flex;
           align-items: center;
+          min-width: 0;
         }
 
         .marquee-fade {
@@ -978,22 +1052,25 @@ export default function HomePage() {
           display: flex;
           flex-direction: row;
           align-items: center;
-          white-space: nowrap;
-          animation: marquee 32s linear infinite;
-          padding: 0 8px;
+          flex-shrink: 0;
+          width: max-content;
+          animation: marqueeScroll linear infinite;
+          will-change: transform;
         }
 
-        .marquee-chip-wrap {
-          display: inline-flex;
+        .marquee-group {
+          display: flex;
+          flex-direction: row;
           align-items: center;
           flex-shrink: 0;
+          gap: 10px;
+          padding-inline: 5px;
         }
 
         .marquee-chip {
           display: inline-flex;
           align-items: center;
           gap: 7px;
-          margin: 0 10px;
           padding: 5px 14px;
           border-radius: 50px;
           background: rgba(255, 255, 255, 0.2);
@@ -1002,21 +1079,20 @@ export default function HomePage() {
           font-weight: 600;
           color: #ffffff;
           flex-shrink: 0;
+          white-space: nowrap;
           backdrop-filter: blur(4px);
           -webkit-backdrop-filter: blur(4px);
           box-shadow: 0 2px 8px rgba(45, 36, 56, 0.08);
         }
 
+        .marquee-chip-text {
+          line-height: 1.2;
+        }
+
         .marquee-chip-icon {
           font-size: 13px;
           line-height: 1;
-        }
-
-        .marquee-chip-sep {
-          color: rgba(255, 255, 255, 0.45);
-          font-size: 10px;
           flex-shrink: 0;
-          user-select: none;
         }
 
         /* Sections */
@@ -1048,10 +1124,18 @@ export default function HomePage() {
         }
 
         .section-title {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
           font-size: 26px;
           font-weight: 800;
           color: #2d2438;
           margin-bottom: 6px;
+        }
+
+        .section-title-emoji {
+          font-size: 1.05em;
+          line-height: 1;
         }
 
         .section--lavender .section-sub { color: #7b8aff; }
@@ -1112,11 +1196,11 @@ export default function HomePage() {
           cursor: not-allowed;
         }
 
-        .hscroll-arrow--prev {
+        .hscroll-arrow--next {
           right: 4px;
         }
 
-        .hscroll-arrow--next {
+        .hscroll-arrow--prev {
           left: 4px;
         }
 
@@ -1124,6 +1208,7 @@ export default function HomePage() {
           display: flex;
           gap: 18px;
           overflow-x: auto;
+          direction: rtl;
           padding: 4px 52px 4px;
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -1476,31 +1561,7 @@ export default function HomePage() {
                 <span className="marquee-label-pulse" aria-hidden />
                 <span>آخر العروض</span>
               </div>
-              <div className="marquee-viewport">
-                <span
-                  className="marquee-fade marquee-fade--start"
-                  aria-hidden
-                />
-                <span className="marquee-fade marquee-fade--end" aria-hidden />
-                <div className="marquee-track">
-                  {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
-                    <span
-                      key={`${item.text}-${i}`}
-                      className="marquee-chip-wrap"
-                    >
-                      <span className="marquee-chip">
-                        <span className="marquee-chip-icon" aria-hidden>
-                          {item.icon}
-                        </span>
-                        {item.text}
-                      </span>
-                      <span className="marquee-chip-sep" aria-hidden>
-                        ✦
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <OffersMarquee />
             </div>
           </div>
         </header>
@@ -1508,7 +1569,7 @@ export default function HomePage() {
         <section className="section section--pink" id="new-arrivals">
           <ScrollReveal>
             <div className="section-head section-head--pink">
-              <h2 className="section-title">✨ وصل حديثاً</h2>
+              <SectionTitle name="وصل حديثاً" emoji="✨" />
               <p className="section-sub">أحدث الإصدارات في مكتبتنا</p>
             </div>
           </ScrollReveal>
@@ -1518,7 +1579,7 @@ export default function HomePage() {
         <section className="section section--lavender" id="bestsellers">
           <ScrollReveal>
             <div className="section-head section-head--lavender">
-              <h2 className="section-title">🔥 الأكثر مبيعاً</h2>
+              <SectionTitle name="الأكثر مبيعاً" emoji="🔥" />
               <p className="section-sub">الكتب التي يعشقها قراؤنا</p>
             </div>
           </ScrollReveal>
@@ -1528,7 +1589,7 @@ export default function HomePage() {
         <section className="section section--pink" id="beginners">
           <ScrollReveal>
             <div className="section-head section-head--pink">
-              <h2 className="section-title">📖 كتب للمتبدئين</h2>
+              <SectionTitle name="كتب للمتبدئين" emoji="📖" />
               <p className="section-sub">ابدأ رحلتك مع القراءة من هنا</p>
             </div>
           </ScrollReveal>
@@ -1538,7 +1599,7 @@ export default function HomePage() {
         <section className="section section--lavender" id="reading-lovers">
           <ScrollReveal>
             <div className="section-head section-head--lavender">
-              <h2 className="section-title">❤️ كتب لحيتان القراءه</h2>
+              <SectionTitle name="كتب لحيتان القراءه" emoji="❤️" />
               <p className="section-sub">لمن يعيش بين صفحات الكتب</p>
             </div>
           </ScrollReveal>
@@ -1548,7 +1609,7 @@ export default function HomePage() {
         <section className="section section--pink" id="our-picks">
           <ScrollReveal>
             <div className="section-head section-head--pink">
-              <h2 className="section-title">⭐ ترشيحات مننا</h2>
+              <SectionTitle name="ترشيحات مننا" emoji="⭐" />
               <p className="section-sub">اختيارات فريق سمسم بوك ستور</p>
             </div>
           </ScrollReveal>
